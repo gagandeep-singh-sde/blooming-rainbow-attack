@@ -3,6 +3,7 @@ import psycopg2
 import itertools
 import string
 from multiprocessing import Pool
+import time
 
 # Define character sets
 uppercase = string.ascii_uppercase
@@ -12,10 +13,10 @@ special = "!@#$%^&*"
 characters = uppercase + lowercase + digits + special
 
 # Define a fixed salt value
-fixed_salt = b"$2b$04$FixedSaltForDemoTool123456"
+fixed_salt = bcrypt.gensalt(rounds=4)
 
 PASSWORD_LENGTH = 2
-PROCESSOR_CORES = 8
+PROCESSOR_CORES = 10
 
 # PostgreSQL connection settings
 db_config = {
@@ -30,44 +31,50 @@ db_config = {
 # PostgreSQL helper functions
 def init_db():
     """Initialize the PostgreSQL database connection."""
-    conn = psycopg2.connect(**db_config)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS dictionary (
-            hash TEXT PRIMARY KEY,
-            password TEXT
+    try:
+        conn = psycopg2.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dictionary (
+                hash TEXT PRIMARY KEY,
+                password TEXT
+            )
+            """
         )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_hash ON dictionary (hash);
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_password ON dictionary (password);
-        """
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_hash ON dictionary (hash);
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_password ON dictionary (password);
+            """
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("Database initialized and table created.")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
 
 
 def insert_password_to_db(password, hashed):
     """Insert hash and password pair into the database."""
-    conn = psycopg2.connect(**db_config)
-    cursor = conn.cursor()
     try:
+        conn = psycopg2.connect(**db_config)
+        cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO dictionary (hash, password) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (hashed.decode("utf-8"), password),
         )
         conn.commit()
-    finally:
         cursor.close()
         conn.close()
+        print(f"Inserted: {password}")
+    except Exception as e:
+        print(f"Error inserting password: {e}")
 
 
 # Helper function to check if the password meets the criteria
@@ -106,6 +113,7 @@ def process_chunk(start, end):
 
 # Main execution: Split combinations among processes
 if __name__ == "__main__":
+    start_time = time.time()
     init_db()
     # Get total combinations for 5 characters
     total_combinations = len(characters) ** PASSWORD_LENGTH
@@ -120,3 +128,22 @@ if __name__ == "__main__":
     # Use multiprocessing to process chunks in parallel
     with Pool(processes=num_chunks) as pool:
         pool.starmap(process_chunk, ranges)
+
+    print(f"Total combinations: {total_combinations}")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Script completed in {elapsed_time:.2f} seconds")
+
+# if __name__ == "__main__":
+#     start_time = time.time()
+#     init_db()
+#     # Get total combinations for PASSWORD_LENGTH characters
+#     total_combinations = len(characters) ** PASSWORD_LENGTH
+
+#     # Process all combinations sequentially
+#     process_chunk(0, total_combinations)
+
+#     print(f"Total combinations: {total_combinations}")
+#     end_time = time.time()
+#     elapsed_time = end_time - start_time
+#     print(f"Script completed in {elapsed_time:.2f} seconds")
