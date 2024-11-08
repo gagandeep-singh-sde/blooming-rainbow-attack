@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres:13
+    container_name: bloomy-rainbow-postgres
+    environment:
+      POSTGRES_DB: bloomy_rainbow_table
+      POSTGRES_USER: gagandeepsinghlotey
+      POSTGRES_PASSWORD: Qwerty@123
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
