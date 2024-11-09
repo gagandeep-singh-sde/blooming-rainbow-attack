@@ -14,6 +14,7 @@ db_config = {
 
 PROCESSOR_CORES = 10
 BATCH_SIZE = 1000
+FALSE_POSITIVE_RATE = 0.00001  # 0.001%
 
 
 def process_batch(offset):
@@ -29,12 +30,12 @@ def process_batch(offset):
 
         bloom_filter = Bloom(
             expected_items=BATCH_SIZE,
-            false_positive_rate=0.01,
+            false_positive_rate=FALSE_POSITIVE_RATE,
             hash_func=consistent_hash,
         )
         for hash_value in hashes:
             bloom_filter.add(hash_value[0])
-        bloom_filter.save(f"bloom-filters/bloom_filter_{offset // BATCH_SIZE}.bloom")
+        bloom_filter.save(f"bloom_filters/bloom_filter_{offset // BATCH_SIZE}.bloom")
         print(f"Bloom filter for batch {offset // BATCH_SIZE} created and saved.")
     except Exception as e:
         print(f"Error processing batch {offset // BATCH_SIZE}: {e}")

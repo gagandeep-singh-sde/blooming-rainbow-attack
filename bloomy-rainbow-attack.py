@@ -30,7 +30,7 @@ def find_hash_in_bloom_filter(args):
     index, given_hash = args
     try:
         bloom_filter = Bloom.load(
-            f"bloom-filters/bloom_filter_{index}.bloom", hash_func=consistent_hash
+            f"bloom_filters/bloom_filter_{index}.bloom", hash_func=consistent_hash
         )
         if given_hash in bloom_filter:
             return index
@@ -74,9 +74,7 @@ def get_passwords_for_hash(given_hash):
 
 if __name__ == "__main__":
     start_time = time.time()
-    given_hash = (
-        "$2b$04$zWePqYXlJt.dnw.PKL0WY.ucxi/791EX.5ztvhQ..QtQUg.KqlgcO"  # Example hash
-    )
+    given_hash = "$2b$04$TZPA01nhJXLQvYQx/wPXHe2DKYhdkSM0P.NWAnTL3hF6iYGwnUWWC"  # $V
     passwords = get_passwords_for_hash(given_hash)
     if passwords:
         for password in passwords:
