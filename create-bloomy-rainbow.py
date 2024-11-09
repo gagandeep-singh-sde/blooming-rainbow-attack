@@ -79,12 +79,11 @@ def insert_password_to_db(password, hashed):
 
 # Helper function to check if the password meets the criteria
 def is_valid_password(password):
-    # has_upper = any(c in uppercase for c in password)
-    # has_lower = any(c in lowercase for c in password)
-    # has_digit = any(c in digits for c in password)
-    # has_special = any(c in special for c in password)
-    # return has_upper and has_lower and has_digit and has_special
-    return True
+    has_upper = any(c in uppercase for c in password)
+    has_lower = any(c in lowercase for c in password)
+    has_digit = any(c in digits for c in password)
+    has_special = any(c in special for c in password)
+    return has_upper and has_lower and has_digit and has_special
 
 
 # Process password combinations in chunks to avoid high memory usage
