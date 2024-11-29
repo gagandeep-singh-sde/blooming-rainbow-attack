@@ -6,7 +6,7 @@ def get_character_set():
     uppercase = string.ascii_uppercase
     lowercase = string.ascii_lowercase
     digits = "0123456789"
-    special = "~!@#$%^&*()_+{}|:\"<>?`-=[]\;',./ "
+    special = "~!@#$%^&*()_+{}|:\"<>?`-=[]\\;',./ "
     characters = uppercase + lowercase + digits + special
     return characters
 
