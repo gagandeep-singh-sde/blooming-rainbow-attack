@@ -1,94 +1,30 @@
 import bcrypt
-import psycopg2
 import itertools
-import string
 from multiprocessing import Pool
 import time
+from rbloom import Bloom
+from utils import get_character_set, is_valid_password, consistent_hash
+from constants import (
+    PASSWORD_LENGTH,
+    PROCESSOR_CORES,
+    BATCH_SIZE,
+    FALSE_POSITIVE_RATE,
+    fixed_salt,
+)
 
 # Define character sets
-uppercase = string.ascii_uppercase
-lowercase = string.ascii_lowercase
-digits = "0123456789"
-special = "!@#$%^&*"
-characters = uppercase + lowercase + digits + special
-
-# Define a fixed salt value
-fixed_salt = bcrypt.gensalt(rounds=4)
-
-PASSWORD_LENGTH = 2
-PROCESSOR_CORES = 10
-
-# PostgreSQL connection settings
-db_config = {
-    "dbname": "bloomy_rainbow_table",
-    "user": "gagandeepsinghlotey",
-    "password": "Qwerty@123",
-    "host": "localhost",
-    "port": "5432",
-}
-
-
-# PostgreSQL helper functions
-def init_db():
-    """Initialize the PostgreSQL database connection."""
-    try:
-        conn = psycopg2.connect(**db_config)
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS dictionary (
-                hash TEXT PRIMARY KEY,
-                password TEXT
-            )
-            """
-        )
-        cursor.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_hash ON dictionary (hash);
-            """
-        )
-        cursor.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_password ON dictionary (password);
-            """
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Database initialized and table created.")
-    except Exception as e:
-        print(f"Error initializing database: {e}")
-
-
-def insert_password_to_db(password, hashed):
-    """Insert hash and password pair into the database."""
-    try:
-        conn = psycopg2.connect(**db_config)
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO dictionary (hash, password) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (hashed.decode("utf-8"), password),
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print(f"Inserted: {password}")
-    except Exception as e:
-        print(f"Error inserting password: {e}")
-
-
-# Helper function to check if the password meets the criteria
-def is_valid_password(password):
-    has_upper = any(c in uppercase for c in password)
-    has_lower = any(c in lowercase for c in password)
-    has_digit = any(c in digits for c in password)
-    has_special = any(c in special for c in password)
-    return has_upper and has_lower and has_digit and has_special
+characters = get_character_set()
 
 
 # Process password combinations in chunks to avoid high memory usage
-def process_chunk(start, end):
+def process_chunk(start, end, chunk_index):
     """Generate valid password combinations and hash them for a range."""
+    bloom_filter = Bloom(
+        expected_items=BATCH_SIZE,
+        false_positive_rate=FALSE_POSITIVE_RATE,
+        hash_func=consistent_hash,
+    )
+    count = 0
     # Generate only passwords within the specific range
     for i, password_tuple in enumerate(
         itertools.product(characters, repeat=PASSWORD_LENGTH)
@@ -106,27 +42,32 @@ def process_chunk(start, end):
 
             # Hash with bcrypt using the fixed salt
             hashed = bcrypt.hashpw(password_bytes, fixed_salt)
+            print(f"Password: {password}, Hash: {hashed.decode('utf-8')}")
 
-            # Store hash-password pair in the database
-            insert_password_to_db(password, hashed)
+            # Add hash to Bloom filter
+            bloom_filter.add(hashed.decode("utf-8"))
+            count += 1
+            if count >= BATCH_SIZE:
+                break
+    bloom_filter.save(f"bloom_filters/bloom_filter_{chunk_index}.bloom")
+    print(f"\nBloom filter for chunk {chunk_index} created and saved.\n")
 
 
 # Main execution: Split combinations among processes
 if __name__ == "__main__":
     start_time = time.time()
-    init_db()
-    # Get total combinations for 5 characters
+    # Get total combinations for PASSWORD_LENGTH characters
     total_combinations = len(characters) ** PASSWORD_LENGTH
-    num_chunks = PROCESSOR_CORES  # Number of CPU cores or processes
-    chunk_size = total_combinations // num_chunks
+    num_chunks = (total_combinations + BATCH_SIZE - 1) // BATCH_SIZE
 
     # Create ranges for each chunk
-    ranges = [(i * chunk_size, (i + 1) * chunk_size) for i in range(num_chunks)]
-    # Adjust the last chunk to include any remaining entries
-    ranges[-1] = (ranges[-1][0], total_combinations)
+    ranges = [
+        (i * BATCH_SIZE, min((i + 1) * BATCH_SIZE, total_combinations), i)
+        for i in range(num_chunks)
+    ]
 
     # Use multiprocessing to process chunks in parallel
-    with Pool(processes=num_chunks) as pool:
+    with Pool(processes=PROCESSOR_CORES) as pool:
         pool.starmap(process_chunk, ranges)
 
     print(f"Total combinations: {total_combinations}")

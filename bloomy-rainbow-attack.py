@@ -1,29 +1,18 @@
+import bcrypt
 from rbloom import Bloom
-from utils import consistent_hash
+import itertools
+from utils import get_character_set, is_valid_password, consistent_hash
 from multiprocessing import Pool
-import psycopg2
 import time
+from constants import (
+    PASSWORD_LENGTH,
+    PROCESSOR_CORES,
+    BATCH_SIZE,
+    FALSE_POSITIVE_RATE,
+    fixed_salt,
+)
 
-db_config = {
-    "dbname": "bloomy_rainbow_table",
-    "user": "gagandeepsinghlotey",
-    "password": "Qwerty@123",
-    "host": "localhost",
-    "port": "5432",
-}
-
-PROCESSOR_CORES = 10
-BATCH_SIZE = 1000
-
-
-def get_total_entries():
-    conn = psycopg2.connect(**db_config)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM dictionary")
-    total_entries = cursor.fetchone()[0]
-    cursor.close()
-    conn.close()
-    return total_entries
+characters = get_character_set()
 
 
 def find_hash_in_bloom_filter(args):
@@ -51,30 +40,33 @@ def find_hash_in_bloom_filters(given_hash, num_bloom_filters):
 
 
 def get_passwords_for_hash(given_hash):
-    total_entries = get_total_entries()
-    num_bloom_filters = (total_entries + BATCH_SIZE - 1) // BATCH_SIZE
+    total_combinations = len(characters) ** PASSWORD_LENGTH
+    num_bloom_filters = (total_combinations + BATCH_SIZE - 1) // BATCH_SIZE
     found_indices = find_hash_in_bloom_filters(given_hash, num_bloom_filters)
     passwords = []
     if found_indices:
-        conn = psycopg2.connect(**db_config)
-        cursor = conn.cursor()
         for index in found_indices:
-            offset = index * BATCH_SIZE
-            cursor.execute(
-                "SELECT password FROM dictionary WHERE hash = %s LIMIT %s OFFSET %s",
-                (given_hash, BATCH_SIZE, offset),
-            )
-            result = cursor.fetchone()
-            if result:
-                passwords.append(result[0])
-        cursor.close()
-        conn.close()
+            start = index * BATCH_SIZE
+            end = min((index + 1) * BATCH_SIZE, total_combinations)
+            for i, password_tuple in enumerate(
+                itertools.product(characters, repeat=PASSWORD_LENGTH)
+            ):
+                if i < start:
+                    continue
+                if i >= end:
+                    break
+                password = "".join(password_tuple)
+                if is_valid_password(password):
+                    password_bytes = password.encode("utf-8")
+                    hashed = bcrypt.hashpw(password_bytes, fixed_salt).decode("utf-8")
+                    if hashed == given_hash:
+                        passwords.append(password)
     return passwords
 
 
 if __name__ == "__main__":
     start_time = time.time()
-    given_hash = "$2b$04$TZPA01nhJXLQvYQx/wPXHe2DKYhdkSM0P.NWAnTL3hF6iYGwnUWWC"  # $V
+    given_hash = input("Enter the hash value: ")  # 5C
     passwords = get_passwords_for_hash(given_hash)
     if passwords:
         for password in passwords:
