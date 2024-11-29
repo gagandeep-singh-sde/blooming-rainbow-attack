@@ -55,20 +55,29 @@ def process_chunk(start, end, chunk_index):
 # Main execution: Split combinations among processes
 if __name__ == "__main__":
     start_time = time.time()
-    # Get total combinations for PASSWORD_LENGTH characters
-    total_combinations = 1000000
+    total_combinations = 10000000
     # total_combinations = len(characters) ** PASSWORD_LENGTH
-    num_chunks = (total_combinations + BATCH_SIZE - 1) // BATCH_SIZE
+    batch_size = 1000000  # Process one million combinations at a time
 
-    # Create ranges for each chunk
-    ranges = [
-        (i * BATCH_SIZE, min((i + 1) * BATCH_SIZE, total_combinations), i)
-        for i in range(num_chunks)
-    ]
+    for batch_start in range(0, total_combinations, batch_size):
+        batch_end = min(batch_start + batch_size, total_combinations)
+        num_chunks = (batch_end - batch_start + BATCH_SIZE - 1) // BATCH_SIZE
 
-    # Use multiprocessing to process chunks in parallel
-    with Pool(processes=PROCESSOR_CORES) as pool:
-        pool.starmap(process_chunk, ranges)
+        # Create ranges for each chunk
+        ranges = [
+            (
+                batch_start + i * BATCH_SIZE,
+                min(batch_start + (i + 1) * BATCH_SIZE, batch_end),
+                i,
+            )
+            for i in range(num_chunks)
+        ]
+
+        # Use multiprocessing to process chunks in parallel
+        with Pool(processes=PROCESSOR_CORES) as pool:
+            pool.starmap(process_chunk, ranges)
+
+        print(f"Processed combinations from {batch_start} to {batch_end}")
 
     print(f"Total combinations: {total_combinations}")
     end_time = time.time()
