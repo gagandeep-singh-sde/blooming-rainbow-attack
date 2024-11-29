@@ -38,7 +38,6 @@ def process_chunk(start, end, chunk_index):
         # Filter by required criteria
         if is_valid_password(password):
             password_bytes = password.encode("utf-8")
-            print(f"Processing: {password}")
 
             # Hash with bcrypt using the fixed salt
             hashed = bcrypt.hashpw(password_bytes, fixed_salt)
@@ -57,7 +56,8 @@ def process_chunk(start, end, chunk_index):
 if __name__ == "__main__":
     start_time = time.time()
     # Get total combinations for PASSWORD_LENGTH characters
-    total_combinations = len(characters) ** PASSWORD_LENGTH
+    total_combinations = 1000000
+    # total_combinations = len(characters) ** PASSWORD_LENGTH
     num_chunks = (total_combinations + BATCH_SIZE - 1) // BATCH_SIZE
 
     # Create ranges for each chunk

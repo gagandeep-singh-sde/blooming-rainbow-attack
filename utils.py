@@ -12,11 +12,22 @@ def get_character_set():
 
 
 def is_valid_password(password):
-    has_upper = any(c.isupper() for c in password)
-    has_lower = any(c.islower() for c in password)
-    has_digit = any(c.isdigit() for c in password)
-    has_special = any(c in "~!@#$%^&*()_+{}|:\"<>?`-=[]\\;',./ " for c in password)
-    return has_upper and has_lower and has_digit and has_special
+    has_upper = False
+    has_lower = False
+    has_digit = False
+    has_special = False
+    for c in password:
+        if c.isupper():
+            has_upper = True
+        elif c.islower():
+            has_lower = True
+        elif c.isdigit():
+            has_digit = True
+        elif c in "~!@#$%^&*()_+{}|:\"<>?`-=[]\\;',./ ":
+            has_special = True
+        if has_upper and has_lower and has_digit and has_special:
+            return True
+    return False
 
 
 def consistent_hash(item):
