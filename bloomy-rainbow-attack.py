@@ -8,7 +8,6 @@ from constants import (
     PASSWORD_LENGTH,
     PROCESSOR_CORES,
     BATCH_SIZE,
-    FALSE_POSITIVE_RATE,
     fixed_salt,
 )
 
