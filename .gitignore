@@ -2,3 +2,6 @@
 postgres_data
 bloom_filters
 __pycache__
+*.sum
+*.mod
+*.exe
