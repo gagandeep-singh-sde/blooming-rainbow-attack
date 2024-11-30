@@ -17,6 +17,7 @@ characters = get_character_set()
 def find_hash_in_bloom_filter(args):
     index, given_hash = args
     try:
+        print(f"Checking in Magic Box {index}")
         bloom_filter = Bloom.load(
             f"bloom_filters/bloom_filter_{index}.bloom", hash_func=consistent_hash
         )
