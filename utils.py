@@ -6,7 +6,7 @@ def get_character_set():
     uppercase = string.ascii_uppercase
     lowercase = string.ascii_lowercase
     digits = "0123456789"
-    special = "~!@#$%^&*()_+{}|:\"<>?`-=[]\\;',./ "
+    special = "!@#$%^&*"
     characters = uppercase + lowercase + digits + special
     return characters
 
@@ -23,7 +23,7 @@ def is_valid_password(password):
             has_lower = True
         elif c.isdigit():
             has_digit = True
-        elif c in "~!@#$%^&*()_+{}|:\"<>?`-=[]\\;',./ ":
+        elif c in "!@#$%^&*":
             has_special = True
         if has_upper and has_lower and has_digit and has_special:
             return True

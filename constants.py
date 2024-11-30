@@ -1,9 +1,9 @@
 import bcrypt
 import os
 
-PASSWORD_LENGTH = 4
+PASSWORD_LENGTH = 5
 PROCESSOR_CORES = 15
-BATCH_SIZE = 1000
+BATCH_SIZE = 10000
 FALSE_POSITIVE_RATE = 0.00001  # 0.001%
 
 # Path to the file where the salt is stored
