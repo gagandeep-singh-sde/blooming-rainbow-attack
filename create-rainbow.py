@@ -2,7 +2,7 @@ import bcrypt
 import psycopg2
 import itertools
 import string
-from multiprocessing import Pool, Value, Lock, Manager
+from multiprocessing import Pool, Manager
 import time
 
 # Define character sets
@@ -18,6 +18,7 @@ fixed_salt = bcrypt.gensalt(rounds=4)
 PASSWORD_LENGTH = 5
 PROCESSOR_CORES = 16
 MAX_RECORDS = 100000  # Maximum number of records to insert
+BATCH_SIZE = 1000  # Number of records to insert in each batch
 
 # PostgreSQL connection settings
 db_config = {
@@ -61,23 +62,23 @@ def init_db():
         print(f"Error initializing database: {e}")
 
 
-def insert_password_to_db(password, hashed, counter, lock):
-    """Insert hash and password pair into the database."""
+def insert_passwords_to_db(batch, counter, lock):
+    """Insert a batch of hash and password pairs into the database."""
     try:
         conn = psycopg2.connect(**db_config)
         cursor = conn.cursor()
-        cursor.execute(
+        cursor.executemany(
             "INSERT INTO dictionary (hash, password) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (hashed.decode("utf-8"), password),
+            batch,
         )
         conn.commit()
         cursor.close()
         conn.close()
         with lock:
-            counter.value += 1
-        print(f"Inserted: {password}")
+            counter.value += len(batch)
+        print(f"Inserted batch of {len(batch)} records.")
     except Exception as e:
-        print(f"Error inserting password: {e}")
+        print(f"Error inserting batch: {e}")
 
 
 # Helper function to check if the password meets the criteria
@@ -103,6 +104,7 @@ def is_valid_password(password):
 # Process password combinations in chunks to avoid high memory usage
 def process_chunk(start, end, counter, lock):
     """Generate valid password combinations and hash them for a range."""
+    batch = []
     # Generate only passwords within the specific range
     for i, password_tuple in enumerate(
         itertools.product(characters, repeat=PASSWORD_LENGTH)
@@ -119,15 +121,24 @@ def process_chunk(start, end, counter, lock):
 
             # Hash with bcrypt using the fixed salt
             hashed = bcrypt.hashpw(password_bytes, fixed_salt)
-            print(f"Hashed: {password} -> {hashed}")
+            # print(f"Hashed: {password} -> {hashed}")
 
-            # Store hash-password pair in the database
-            insert_password_to_db(password, hashed, counter, lock)
+            # Add hash-password pair to the batch
+            batch.append((hashed.decode("utf-8"), password))
+
+            # Insert batch into the database when it reaches BATCH_SIZE
+            if len(batch) >= BATCH_SIZE:
+                insert_passwords_to_db(batch, counter, lock)
+                batch = []
 
             # Check if the maximum number of records has been reached
             with lock:
                 if counter.value >= MAX_RECORDS:
                     return
+
+    # Insert any remaining records in the batch
+    if batch:
+        insert_passwords_to_db(batch, counter, lock)
 
 
 # Main execution: Split combinations among processes
