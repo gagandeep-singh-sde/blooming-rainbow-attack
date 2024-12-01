@@ -2,7 +2,7 @@ import bcrypt
 import psycopg2
 import itertools
 import string
-from multiprocessing import Pool
+from multiprocessing import Pool, Value, Lock, Manager
 import time
 
 # Define character sets
@@ -15,8 +15,9 @@ characters = uppercase + lowercase + digits + special
 # Define a fixed salt value
 fixed_salt = bcrypt.gensalt(rounds=4)
 
-PASSWORD_LENGTH = 2
-PROCESSOR_CORES = 10
+PASSWORD_LENGTH = 5
+PROCESSOR_CORES = 16
+MAX_RECORDS = 100000  # Maximum number of records to insert
 
 # PostgreSQL connection settings
 db_config = {
@@ -60,7 +61,7 @@ def init_db():
         print(f"Error initializing database: {e}")
 
 
-def insert_password_to_db(password, hashed):
+def insert_password_to_db(password, hashed, counter, lock):
     """Insert hash and password pair into the database."""
     try:
         conn = psycopg2.connect(**db_config)
@@ -72,6 +73,8 @@ def insert_password_to_db(password, hashed):
         conn.commit()
         cursor.close()
         conn.close()
+        with lock:
+            counter.value += 1
         print(f"Inserted: {password}")
     except Exception as e:
         print(f"Error inserting password: {e}")
@@ -79,15 +82,26 @@ def insert_password_to_db(password, hashed):
 
 # Helper function to check if the password meets the criteria
 def is_valid_password(password):
-    has_upper = any(c in uppercase for c in password)
-    has_lower = any(c in lowercase for c in password)
-    has_digit = any(c in digits for c in password)
-    has_special = any(c in special for c in password)
-    return has_upper and has_lower and has_digit and has_special
+    has_upper = False
+    has_lower = False
+    has_digit = False
+    has_special = False
+    for c in password:
+        if c.isupper():
+            has_upper = True
+        elif c.islower():
+            has_lower = True
+        elif c.isdigit():
+            has_digit = True
+        elif c in special:
+            has_special = True
+        if has_upper and has_lower and has_digit and has_special:
+            return True
+    return False
 
 
 # Process password combinations in chunks to avoid high memory usage
-def process_chunk(start, end):
+def process_chunk(start, end, counter, lock):
     """Generate valid password combinations and hash them for a range."""
     # Generate only passwords within the specific range
     for i, password_tuple in enumerate(
@@ -102,13 +116,18 @@ def process_chunk(start, end):
         # Filter by required criteria
         if is_valid_password(password):
             password_bytes = password.encode("utf-8")
-            print(f"Processing: {password}")
 
             # Hash with bcrypt using the fixed salt
             hashed = bcrypt.hashpw(password_bytes, fixed_salt)
+            print(f"Hashed: {password} -> {hashed}")
 
             # Store hash-password pair in the database
-            insert_password_to_db(password, hashed)
+            insert_password_to_db(password, hashed, counter, lock)
+
+            # Check if the maximum number of records has been reached
+            with lock:
+                if counter.value >= MAX_RECORDS:
+                    return
 
 
 # Main execution: Split combinations among processes
@@ -125,9 +144,16 @@ if __name__ == "__main__":
     # Adjust the last chunk to include any remaining entries
     ranges[-1] = (ranges[-1][0], total_combinations)
 
-    # Use multiprocessing to process chunks in parallel
-    with Pool(processes=num_chunks) as pool:
-        pool.starmap(process_chunk, ranges)
+    # Shared counter and lock
+    with Manager() as manager:
+        counter = manager.Value("i", 0)
+        lock = manager.Lock()
+
+        # Use multiprocessing to process chunks in parallel
+        with Pool(processes=num_chunks) as pool:
+            pool.starmap(
+                process_chunk, [(start, end, counter, lock) for start, end in ranges]
+            )
 
     print(f"Total combinations: {total_combinations}")
     end_time = time.time()
